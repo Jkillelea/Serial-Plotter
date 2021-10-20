@@ -66,6 +66,41 @@ impl ThreadData {
     }
 }
 
+
+pub struct TwoDataReadoutModel {
+    data: (f64, f64)
+}
+
+#[widget]
+impl Widget for TwoDataReadout {
+    fn model(_relm: &Relm<Self>, _: ()) -> TwoDataReadoutModel {
+        TwoDataReadoutModel {
+            data: (0.0, 0.0)
+        }
+    }
+
+    fn update(&mut self, msg: Msg) {
+    }
+
+    view! {
+
+        // Feedback on cursor pos
+        gtk::Box {
+            orientation: Horizontal,
+
+            gtk::Label {
+                text: &self.model.data.0.to_string(),
+                hexpand: true,
+            },
+            gtk::Label {
+                text: &self.model.data.1.to_string(),
+                hexpand: true,
+            },
+        },
+
+    }
+}
+
 #[widget]
 impl Widget for Win {
     fn model(relm: &Relm<Self>, _: ()) -> Model {
@@ -173,18 +208,9 @@ impl Widget for Win {
                     motion_notify_event(_, event) => (Msg::MoveCursor(event.position()), Inhibit(false))
                 },
 
-                gtk::Box {
-                    orientation: Horizontal,
 
-                    gtk::Label {
-                        text: &self.model.cursor_pos.0.to_string(),
-                        hexpand: true,
-                    },
-                    gtk::Label {
-                        text: &self.model.cursor_pos.1.to_string(),
-                        hexpand: true,
-                    },
-                },
+                // TODO: not getting update messages. Need to do the plumbing
+                TwoDataReadout { },
 
                 gtk::Button {
                     clicked => Msg::Quit,
