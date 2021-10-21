@@ -1,7 +1,5 @@
 use gdk::EventMask;
-use gtk::prelude::*;
-use gtk::Inhibit;
-use gtk::{DrawingArea, Orientation::*};
+use gtk::{Inhibit, DrawingArea, prelude::*, Orientation::*};
 use relm::{DrawHandler, Relm, Widget};
 use relm_derive::{widget, Msg};
 use std::sync::mpsc;
@@ -12,9 +10,7 @@ use std::time::Duration;
 #[derive(Msg, Debug)]
 pub enum Msg {
     Quit,
-    Adjust(f32),
-    Data(f32),
-    UpdateDrawBuffer,
+    Draw,
     MoveCursor((f64, f64)),
 }
 
@@ -25,9 +21,6 @@ pub struct Model {
 
     draw_handler: DrawHandler<DrawingArea>,
     cursor_pos: (f64, f64),
-
-    // data: Vec<f32>,
-    data: f32,
 }
 
 /// Background thread data
@@ -59,9 +52,6 @@ impl ThreadData {
                     _ => eprintln!("Unhandled message {:?}", msg),
                 }
             }
-
-            // Send out data
-            self.relm_sender.send(Msg::Adjust(0.1)).unwrap();
         }
     }
 }
@@ -80,11 +70,13 @@ impl Widget for TwoDataReadout {
     }
 
     fn update(&mut self, msg: Msg) {
+        match msg {
+            Msg::MoveCursor(pos) => { self.model.data = pos; },
+            _ => { dbg!(msg); },
+        };
     }
 
     view! {
-
-        // Feedback on cursor pos
         gtk::Box {
             orientation: Horizontal,
 
@@ -97,8 +89,8 @@ impl Widget for TwoDataReadout {
                 hexpand: true,
             },
         },
-
     }
+
 }
 
 #[widget]
@@ -106,35 +98,32 @@ impl Widget for Win {
     fn model(relm: &Relm<Self>, _: ()) -> Model {
         let mut thread_channels = Vec::new();
 
-        // // The Channel for sending from the main thread to the timer thread.
-        // // Used for communicating start/pause/quit.
-        // let (thread_tx, thread_rx) = mpsc::channel();
+        // The Channel for sending from the main thread to the timer thread.
+        // Used for communicating start/pause/quit.
+        let (thread_tx, thread_rx) = mpsc::channel();
 
-        // // This is the stream for sending messages to the own widget.
-        // let stream = relm.stream().clone();
+        // This is the stream for sending messages to the own widget.
+        let stream = relm.stream().clone();
 
-        // // The Channel for sending from the timer thread to the main thread.
-        // // This is just a thread-safe wrapper over the stream, more or less
-        // let (_channel, relm_sender) = relm::Channel::new(move |msg| {
-        //     stream.emit(msg);
-        // });
+        // The Channel for sending from the timer thread to the main thread.
+        // This is just a thread-safe wrapper over the stream, more or less
+        let (_channel, relm_sender) = relm::Channel::new(move |msg| {
+            stream.emit(msg);
+        });
 
-        // // Background thread to send messages to the main GUI thread
-        // thread::spawn(move || {
-        //     let mut task_data = ThreadData::new(thread_rx, relm_sender);
-        //     task_data.run_loop();
-        // });
+        // Background thread to send messages to the main GUI thread
+        thread::spawn(move || {
+            let mut task_data = ThreadData::new(thread_rx, relm_sender);
+            task_data.run_loop();
+        });
 
-        // thread_channels.push(thread_tx);
+        thread_channels.push(thread_tx);
 
         Model {
             thread_channels,
 
             draw_handler: DrawHandler::new().expect("Could not create draw handler"),
             cursor_pos: (0.0, 0.0),
-
-            // data: Vec::with_capacity(1024),
-            data: 0.0,
         }
     }
 
@@ -150,23 +139,11 @@ impl Widget for Win {
         match msg {
             Msg::Quit => {
                 // tell all the threads to quit
-                for channel in &self.model.thread_channels {
-                    channel.send(Msg::Quit).unwrap();
-                }
+                self.model.thread_channels.iter().for_each(|chan| chan.send(Msg::Quit).unwrap());
+                gtk::main_quit();
+            },
 
-                gtk::main_quit()
-            }
-
-            Msg::Data(d) => {
-                // self.model.data.push(d);
-                self.model.data = d;
-            }
-
-            Msg::Adjust(amount) => {
-                self.model.data += amount;
-            }
-
-            Msg::UpdateDrawBuffer => {
+            Msg::Draw => {
                 let context = self.model.draw_handler.get_context().unwrap();
                 context.set_source_rgb(1.0, 1.0, 1.0);
                 context.paint().unwrap();
@@ -181,21 +158,23 @@ impl Widget for Win {
                     2.0 * std::f64::consts::PI,
                 );
                 context.fill().unwrap();
-            }
+            },
 
             Msg::MoveCursor(pos) => {
                 self.model.cursor_pos = pos;
-            }
+                self.components.readout.emit(Msg::MoveCursor(pos));
+            },
 
-            _ => {
-                eprintln!("Unhandled message {:#?}", msg);
-            }
+            _ => { dbg!(msg); }
         }
     }
 
     view! {
         #[name = "window"]
         gtk::Window {
+            default_width:  800,
+            default_height: 400,
+
             gtk::Box {
                 orientation: Vertical,
 
@@ -204,13 +183,13 @@ impl Widget for Win {
                     expand: true,
 
                     // On GTK Draw Event
-                    draw(_, _) => (Msg::UpdateDrawBuffer, Inhibit(false)),
+                    draw(_, _) => (Msg::Draw, Inhibit(false)),
                     motion_notify_event(_, event) => (Msg::MoveCursor(event.position()), Inhibit(false))
                 },
 
-
-                // TODO: not getting update messages. Need to do the plumbing
-                TwoDataReadout { },
+                #[name = "readout"]
+                TwoDataReadout {
+                },
 
                 gtk::Button {
                     clicked => Msg::Quit,
@@ -218,8 +197,6 @@ impl Widget for Win {
                 },
             },
 
-            // Use a tuple when you want to both send a message and return a value to
-            // the GTK+ callback.
             delete_event(_, _) => (Msg::Quit, Inhibit(false)),
             // key_press_event(_, event) => (Msg::KeyPress(event.clone()), Inhibit(false)),
         }
