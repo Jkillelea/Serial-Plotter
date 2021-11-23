@@ -1,16 +1,22 @@
+#![allow(unused)]
+
 use gdk::EventMask;
-use gtk::{Inhibit, DrawingArea, prelude::*, Orientation::*};
+use gtk::{prelude::*, DrawingArea, Inhibit, Orientation::*};
 use relm::{DrawHandler, Relm, Widget};
 use relm_derive::{widget, Msg};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+mod widgets;
+use widgets::*;
+
 /// Communication messages. Used by both the Relm event stream and inter-thread communication
 #[derive(Msg, Debug)]
 pub enum Msg {
     Quit,
     Draw,
+    DrawGraph,
     MoveCursor((f64, f64)),
 }
 
@@ -45,7 +51,7 @@ impl ThreadData {
             if let Ok(msg) = self.rx_pipe.recv_timeout(Duration::from_millis(1000)) {
                 match msg {
                     Msg::Quit => {
-                        eprintln!("Thread quitting");
+                        // eprintln!("Thread quitting");
                         self.quit = true;
                     }
 
@@ -54,43 +60,6 @@ impl ThreadData {
             }
         }
     }
-}
-
-
-pub struct TwoDataReadoutModel {
-    data: (f64, f64)
-}
-
-#[widget]
-impl Widget for TwoDataReadout {
-    fn model(_relm: &Relm<Self>, _: ()) -> TwoDataReadoutModel {
-        TwoDataReadoutModel {
-            data: (0.0, 0.0)
-        }
-    }
-
-    fn update(&mut self, msg: Msg) {
-        match msg {
-            Msg::MoveCursor(pos) => { self.model.data = pos; },
-            _ => { dbg!(msg); },
-        };
-    }
-
-    view! {
-        gtk::Box {
-            orientation: Horizontal,
-
-            gtk::Label {
-                text: &self.model.data.0.to_string(),
-                hexpand: true,
-            },
-            gtk::Label {
-                text: &self.model.data.1.to_string(),
-                hexpand: true,
-            },
-        },
-    }
-
 }
 
 #[widget]
@@ -128,20 +97,24 @@ impl Widget for Win {
     }
 
     fn init_view(&mut self) {
-        self.model.draw_handler.init(&self.widgets.drawing_area);
-        self.widgets
-            .drawing_area
-            .add_events(EventMask::POINTER_MOTION_MASK); // Unmask the pointer motion event
+        // self.model.draw_handler.init(&self.widgets.drawing_area);
+        // self.widgets
+        //     .drawing_area
+        //     .add_events(EventMask::POINTER_MOTION_MASK); // Unmask the pointer motion event
         self.widgets.window.resize(400, 400);
     }
 
     fn update(&mut self, msg: Msg) {
         match msg {
+
+            // tell all the threads to quit
             Msg::Quit => {
-                // tell all the threads to quit
-                self.model.thread_channels.iter().for_each(|chan| chan.send(Msg::Quit).unwrap());
+                self.model
+                    .thread_channels
+                    .iter()
+                    .for_each(|chan| chan.send(Msg::Quit).unwrap());
                 gtk::main_quit();
-            },
+            }
 
             Msg::Draw => {
                 let context = self.model.draw_handler.get_context().unwrap();
@@ -158,15 +131,17 @@ impl Widget for Win {
                     2.0 * std::f64::consts::PI,
                 );
                 context.fill().unwrap();
-            },
+            }
+
+            Msg::DrawGraph => self.components.graph_area.emit(GraphAreaMsg::Draw),
 
             Msg::MoveCursor(pos) => {
                 self.model.cursor_pos = pos;
-                self.components.readout.emit(Msg::MoveCursor(pos));
-            },
+                self.components.readout.emit(TwoDataReadoutMsg::Data(pos));
+            }
 
-            _ => { dbg!(msg); }
-        }
+            _ => eprintln!("Unkown Message: {:#?}", msg)
+        };
     }
 
     view! {
@@ -178,18 +153,21 @@ impl Widget for Win {
             gtk::Box {
                 orientation: Vertical,
 
-                #[name = "drawing_area"]
-                gtk::DrawingArea {
-                    expand: true,
+                // #[name = "drawing_area"]
+                // gtk::DrawingArea {
+                //     expand: true,
+                //     draw(_, _) => (Msg::Draw, Inhibit(false)), // On GTK Draw Event
+                //     motion_notify_event(_, event) => (Msg::MoveCursor(event.position()), Inhibit(false))
+                // },
 
-                    // On GTK Draw Event
-                    draw(_, _) => (Msg::Draw, Inhibit(false)),
-                    motion_notify_event(_, event) => (Msg::MoveCursor(event.position()), Inhibit(false))
+                #[name = "graph_area"]
+                GraphArea {
+                    expand: true,
+                    draw(_, _) => (Msg::DrawGraph, Inhibit(false)), // On GTK Draw Event
                 },
 
                 #[name = "readout"]
-                TwoDataReadout {
-                },
+                TwoDataReadout,
 
                 gtk::Button {
                     clicked => Msg::Quit,
@@ -198,7 +176,6 @@ impl Widget for Win {
             },
 
             delete_event(_, _) => (Msg::Quit, Inhibit(false)),
-            // key_press_event(_, event) => (Msg::KeyPress(event.clone()), Inhibit(false)),
         }
     }
 }
