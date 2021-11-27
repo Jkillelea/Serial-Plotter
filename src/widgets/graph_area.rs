@@ -53,31 +53,22 @@ impl Widget for GraphArea {
         let xmax  = x0 + w;
         let ymax  = y0 + h;
 
-        let colors = [(1.0, 0.0, 0.0),
-                      (0.0, 1.0, 0.0),
-                      (0.0, 0.0, 1.0)];
+        let context = self.model.draw_handler.get_context().unwrap();
 
-        for c in colors {
-            let context = self.model.draw_handler.get_context().unwrap();
+        context.set_source_rgb(self.model.color.0, self.model.color.1, self.model.color.2);
+        context.move_to(x0, y0 + 0.5 * h);
 
-            context.set_source_rgb(c.0, c.1, c.2);
-            // context.set_source_rgb(self.model.color.0, self.model.color.1, self.model.color.2);
-            context.move_to(x0, y0 + 0.5 * h);
+        let points = 50;
+        let phase = 0.0;
+        for i in 0 .. points {
 
-            let points = 50;
-            let phase = 0.0 * PI * c.0 / 3.0
-                      + 1.0 * PI * c.1 / 3.0
-                      + 2.0 * PI * c.2 / 3.0;
-            for i in 0 .. points {
+            // Draw a sine
+            let x = x0 + w * (i as f64) / points as f64;
+            let y = y0 + 0.5 * h + 0.4 * h * (2.0 * PI * x / xmax + phase).sin();
 
-                // Draw a sine
-                let x = x0 + w * (i as f64) / points as f64;
-                let y = y0 + 0.5 * h + 0.4 * h * (2.0 * PI * x / xmax + phase).sin();
-
-                context.line_to(x, y);
-            }
-            context.stroke().unwrap();
+            context.line_to(x, y);
         }
+        context.stroke().unwrap();
     }
 
     view! {
