@@ -45,9 +45,12 @@ impl Widget for GraphArea {
     fn draw(&mut self) {
         use std::f64::consts::PI;
 
+        // Set up the drawing area context
         let alloc = self.widgets.drawing_area.allocation();
         let w     = alloc.width  as f64;
         let h     = alloc.height as f64;
+        // let x0    = alloc.x as f64;
+        // let y0    = alloc.y as f64;
         let x0    = 0.0; // TODO: why is alloc.x not 0?
         let y0    = 0.0; // TODO: why is alloc.y not 0?
         let xmax  = x0 + w;
@@ -58,28 +61,27 @@ impl Widget for GraphArea {
         context.set_source_rgb(self.model.color.0, self.model.color.1, self.model.color.2);
         context.move_to(x0, y0 + 0.5 * h);
 
+        // Draw a sine
         let points = 50;
-        let phase = 0.0;
-        for i in 0 .. points {
+        let phase  = 0.0;
+        let freq   = 2.0;
+        let ampl   = h / 2.0;
 
-            // Draw a sine
+        (0 .. points).map(|i| {
             let x = x0 + w * (i as f64) / points as f64;
-            let y = y0 + 0.5 * h + 0.4 * h * (2.0 * PI * x / xmax + phase).sin();
+            let y = y0 + 0.5 * h + ampl * (2.0 * PI * freq * x / xmax + phase).sin();
+            (x, y)
+        })
+        .for_each(|(x, y)| context.line_to(x, y) );
 
-            context.line_to(x, y);
-        }
         context.stroke().unwrap();
     }
 
     view! {
-        gtk::Box {
-            orientation: Orientation::Horizontal,
-
-            #[name = "drawing_area"]
-            gtk::DrawingArea {
-                expand: true,
-                draw(_, _) => (GraphAreaMsg::Draw, Inhibit(false)),
-            }
-        },
+        #[name = "drawing_area"]
+        gtk::DrawingArea {
+            expand: true,
+            draw(_, _) => (GraphAreaMsg::Draw, Inhibit(false)),
+        }
     }
 }
