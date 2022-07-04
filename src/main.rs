@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use gdk::EventMask;
-use gtk::{prelude::*, DrawingArea, Inhibit, Orientation::*};
+use gtk::{*, prelude::*, DrawingArea, Inhibit, Orientation::*};
 use relm::{DrawHandler, Relm, Widget};
 use relm_derive::{widget, Msg};
 use std::sync::mpsc;
@@ -17,6 +17,7 @@ pub enum Msg {
     Quit,
     DrawGraph,
     MoveCursor((f64, f64)),
+    Color(gdk::RGBA),
 }
 
 /// GUI model
@@ -35,9 +36,10 @@ impl Widget for Win {
 
     fn update(&mut self, msg: Msg) {
         match msg {
-            Msg::Quit => gtk::main_quit(),
-            Msg::DrawGraph => self.components.graph_area.emit(GraphAreaMsg::Draw),
+            Msg::DrawGraph       => self.components.graph_area.emit(GraphAreaMsg::Draw),
             Msg::MoveCursor(pos) => self.components.readout.emit(TwoDataReadoutMsg::Data(pos)),
+            Msg::Color(c)        => self.components.graph_area.emit(GraphAreaMsg::SetColor(c)),
+            Msg::Quit            => gtk::main_quit(),
             _ => eprintln!("Unkown Message: {:#?}", msg),
         };
     }
@@ -59,6 +61,11 @@ impl Widget for Win {
 
                 #[name = "readout"]
                 TwoDataReadout,
+
+                #[name = "color_button"]
+                gtk::ColorButton {
+                    color_set(btn) => Msg::Color(btn.rgba().clone()),
+                },
 
                 gtk::Button {
                     clicked => Msg::Quit,
