@@ -66,22 +66,26 @@ impl Widget for GraphArea {
                                     self.model.color.alpha());
             context.move_to(x0, y0 + 0.5 * h);
 
-            // Draw a sine
-            let point_density = 5.0;
-            let phase = 0.0;
-            let freq = 5.0;
-            let ampl = h / 2.0;
+            // // Draw a sine
+            // let point_density = 5.0;
+            // let phase = 0.0;
+            // let freq = 5.0;
+            // let ampl = h / 2.0;
 
-            // Sine wave fidelity should scale with screen (diagonal) size
-            let points = ((w.powf(2.0) + h.powf(2.0)).sqrt() / point_density) as i32;
+            // // Sine wave fidelity should scale with screen (diagonal) size
+            // let points = ((w.powf(2.0) + h.powf(2.0)).sqrt() / point_density) as i32;
 
-            (0..points)
-                .map(|i| {
-                    let x = x0 + w * (i as f64) / points as f64;
-                    let y = y0 + 0.5 * h + ampl * (2.0 * PI * freq * x / xmax + phase).sin();
-                    (x, y)
-                })
-                .for_each(|(x, y)| context.line_to(x, y));
+            // (0..points)
+            //     .map(|i| {
+            //         let x = x0 + w * (i as f64) / points as f64;
+            //         let y = y0 + 0.5 * h + ampl * (2.0 * PI * freq * x / xmax + phase).sin();
+            //         (x, y)
+            //     })
+            //     .for_each(|(x, y)| context.line_to(x, y));
+
+            for (x, &d) in self.model.data.iter().enumerate() {
+                context.line_to(10.0 * x as f64, d as f64)
+            }
 
             if let Err(e) = context.stroke() {
                 eprintln!("Drawing error: {}", e);
